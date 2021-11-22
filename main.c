@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define input_size 1024
 #define args_size 64
@@ -9,6 +11,7 @@ void turtle_run();
 char* turtle_read();
 char** turtle_parse(char* input);
 int turtle_execute(char** args);
+int turtle_fork(char** args);
 
 int main() {
     // TODO: load config files
@@ -113,14 +116,54 @@ char** turtle_parse(char* input) {
 
     args[arg_index] = NULL;
 
-    // // ensure proper parsing
-    // for (int i = 0; i < arg_index; i++) {
-    //     printf("%s\n", args[i]);
-    // }
-
-    // return args;
+    return args;
 }
 
 int turtle_execute(char** args) {
-    return 0;
+    // no command was given
+    if (args[0] == NULL) {
+        return 1; // TODO: exit success?
+    }
+
+    // built-ins
+    if (strcmp(args[0], "cd") == 0) {
+        // TODO
+        return 1;
+    } else if (strcmp(args[0], "help") == 0) {
+        // TODO
+        return 1;
+    } else if (strcmp(args[0], "exit") == 0) {
+        // TODO
+        return 1;
+    } else {
+        // launch a new process to handle this command
+        return turtle_fork(args);
+    }
+}
+
+int turtle_fork(char** args) {
+    int pid;
+    int wait_val;
+    int status;
+
+    pid = fork();
+    // error when forking
+    if (pid < 0) {
+        perror("turtle");
+    }
+    // child process
+    else if (pid == 0) {
+        if (execvp(args[0], args) == -1) {
+            perror("turtle");
+        }
+        exit(EXIT_FAILURE); // shouldn't execute if execvp was successful
+    }
+    // parent process
+    else {
+        do {
+            wait_val = waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+
+    return 1; // TODO: exit success?
 }
