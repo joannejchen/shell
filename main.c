@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "commands.h"
 
 #define input_size 1024
 #define args_size 64
@@ -36,7 +37,7 @@ void turtle_run() {
         // Parse the string into its command and arguments
         args = turtle_parse(input);
         // Execute the command
-        // status = turtle_execute();
+        status = turtle_execute(args);
 
         // clean memory for the next command
         free(input);
@@ -134,6 +135,11 @@ int turtle_execute(char** args) {
         return 1;
     } else if (strcmp(args[0], "exit") == 0) {
         // TODO
+        return 1;
+    } else if (strcmp(args[0], "q") == 0) {
+        exit(EXIT_SUCCESS);
+    } else if (strcmp(args[0], "turtlesay") == 0) {
+        turtlesay(args);
         return 1;
     } else {
         // launch a new process to handle this command
