@@ -71,6 +71,7 @@ char* turtle_read() {
         else if (letter == '\n') {
             // be able to handle multiple lines of input
             if (index == 0 || buffer[index-1] != '\\') {
+                buffer[index] = '\0';
                 return buffer;
             } else {
                 index--;
@@ -140,16 +141,14 @@ int turtle_execute(char** args) {
 
     // built-ins
     if (strcmp(args[0], "cd") == 0) {
-        // TODO
-        return 1;
+        return turtle_cd(args);
     } else if (strcmp(args[0], "help") == 0) {
         // TODO
         return 1;
     } else if (strcmp(args[0], "exit") == 0) {
-        // TODO
-        return 1;
+        return turtle_exit();
     } else if (strcmp(args[0], "q") == 0) {
-        exit(EXIT_SUCCESS);
+        return turtle_exit();
     } else if (strcmp(args[0], "turtlesay") == 0) {
         turtlesay(args);
         return 1;

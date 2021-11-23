@@ -1,8 +1,29 @@
-#include "commands.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
+#include "commands.h"
+
+/* change directory */
+int turtle_cd(char** args) {
+    //check for invalid input
+    if(args[1] == NULL) {
+        fprintf(stderr, "turtle: invalid argument for cd\n");
+    } else {
+        if(chdir(args[1]) != 0) {
+            perror("turtle");
+        }
+    }
+    return 1;
+}
+
+/* exits the shell */
+int turtle_exit() {
+    return 0;
+}
+
+/* turtle say command */
 void turtlesay(char** args) {
     printf("\n"); //next line
 
