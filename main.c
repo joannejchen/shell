@@ -32,7 +32,7 @@ void turtle_run() {
 
     while (status) {
         // Read the command from standard input
-        printf("turtle ~ ");
+        printf("turtle $ ");
         input = turtle_read();
         // Parse the string into its command and arguments
         args = turtle_parse(input);
@@ -63,13 +63,25 @@ char* turtle_read() {
         letter = getchar();
 
         // check if this char is the last character
-        if (letter == EOF || letter == '\n') {
+        if (letter == EOF) {
             buffer[index] = '\0'; // null terminate strings
             return buffer;
         }
-
-        buffer[index] = letter;
-        index++;
+        // handle special newline case
+        else if (letter == '\n') {
+            // be able to handle multiple lines of input
+            if (index == 0 || buffer[index-1] != '\\') {
+                return buffer;
+            } else {
+                index--;
+                printf("> ");
+            }
+        }
+        // read input as normally
+        else {
+            buffer[index] = letter;
+            index++;
+        }
 
         // determine whether we need to allocate more space
         if (index >= buffer_size) {
