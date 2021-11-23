@@ -143,8 +143,7 @@ int turtle_execute(char** args) {
     if (strcmp(args[0], "cd") == 0) {
         return turtle_cd(args);
     } else if (strcmp(args[0], "help") == 0) {
-        // TODO
-        return 1;
+        return turtle_help();
     } else if (strcmp(args[0], "exit") == 0) {
         return turtle_exit();
     } else if (strcmp(args[0], "q") == 0) {

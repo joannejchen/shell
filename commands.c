@@ -23,6 +23,18 @@ int turtle_exit() {
     return 0;
 }
 
+/* prints basic information about this shell */
+int turtle_help() {
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    printf("welcome to the turtle shell!\n");
+    printf("to use, type a valid command followed by any relevant arguments\n");
+    printf("in addition to most general shell commands, the following are also builtin:\n");
+    printf("\thelp\n");
+    printf("\tturtlesay\n");
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    return 1;
+}
+
 /* turtle say command */
 void turtlesay(char** args) {
     printf("\n"); //next line

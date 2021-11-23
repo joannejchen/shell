@@ -3,6 +3,7 @@
 
 extern int turtle_cd(char** args);
 extern int turtle_exit();
+extern int turtle_help();
 extern void turtlesay(char** args);
 
 #endif
