@@ -26,27 +26,77 @@ int main(int argc, char* argv[], char** envp) {
     return EXIT_SUCCESS;
 }
 
-int turtle_execute(char** args) {
-    // no command was given
-    if (args[0] == NULL) {
-        return 1; // TODO: exit success?
+// execute multiple commands (piping them lsif necessary)
+int turtle_execute(struct Commands* commands) {
+    int exec_ret;
+
+    // if this is just a single command, then we can run it as normal
+    if (commands->cmd_count == 1) {
+        commands->commands[0]->fds[0] = STDIN_FILENO;
+        commands->commands[0]->fds[1] = STDOUT_FILENO;
+        exec_ret = turtle_execute_single(commands, commands->commands[0], NULL);
+    }
+    // have to handle the commands through piping
+    else {
+        exec_ret = -1;
     }
 
-    // built-ins
-    if (strcmp(args[0], "cd") == 0) {
-        return turtle_cd(args);
-    } else if (strcmp(args[0], "help") == 0) {
+    return exec_ret;
+}
+
+int turtle_execute_single(struct Commands* commands, struct Command* command, int* pipes[2]) {
+    // check if the command is any of the built-ins
+    if (strcmp(command->cmd_name, "cd") == 0) {
+        return turtle_cd(command->argv);
+    } else if (strcmp(command->cmd_name, "exit") == 0 || strcmp(command->cmd_name, "q") == 0) {
+        return turtle_exit();
+    } else if (strcmp(command->cmd_name, "help") == 0) {
         return turtle_help();
-    } else if (strcmp(args[0], "exit") == 0) {
-        return turtle_exit();
-    } else if (strcmp(args[0], "q") == 0) {
-        return turtle_exit();
-    } else if (strcmp(args[0], "turtlesay") == 0) {
-        return turtlesay(args);
-    } else {
-        // launch a new process to handle this command
-        return turtle_launch(args);
+    } else if (strcmp(command->cmd_name, "turtlesay") == 0) {
+        return turtlesay(command->argv);
     }
+    // otherwise, fork the process and launch
+    else {
+        int pid = fork();
+
+        // fork failed
+        if (pid == -1) {
+            fprintf(stderr, "turtle failed to fork process");
+        }
+        // in child process
+        else if (pid == 0) {
+            int input_fd = command->fds[0];
+            int output_fd = command->fds[1];
+
+            // change input file descriptor if it isn't std
+            if (input_fd != -1 && input_fd != STDIN_FILENO) {
+                dup2(input_fd, STDIN_FILENO);
+            }
+            // change output file descriptor if it isn't std
+            if (output_fd != -1 && output_fd != STDOUT_FILENO) {
+                dup2(output_fd, STDOUT_FILENO);
+            }
+            // check if this command requires piping
+            if (pipes != NULL) {
+                // TODO
+            }
+
+            // execute the command
+            execvp(command->cmd_name, command->argv);
+            exit(EXIT_FAILURE); // execvp should not return here
+        }
+        // in parent process
+        else {
+            int wait_val;
+            int status;
+            do {
+                wait_val = waitpid(pid, &status, WUNTRACED);
+            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        }
+
+        return 1; // exit success?
+    }
+
 }
 
 // make sure the shell is running interactively as the foreground job
@@ -89,33 +139,6 @@ void turtle_init() {
         fprintf(stderr, "couldn't make the turtle interactive\n");
         exit(1);
     }
-}
-
-int turtle_launch(char** args) {
-    int pid;
-    int wait_val;
-    int status;
-
-    pid = fork();
-    // error when forking
-    if (pid < 0) {
-        perror("turtle");
-    }
-    // child process
-    else if (pid == 0) {
-        if (execvp(args[0], args) == -1) {
-            perror("turtle");
-        }
-        exit(EXIT_FAILURE); // shouldn't execute if execvp was successful
-    }
-    // parent process
-    else {
-        do {
-            wait_val = waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-    }
-
-    return 1; // TODO: exit success?
 }
 
 struct Commands* turtle_parse(char* input) {
@@ -255,11 +278,11 @@ void turtle_run() {
         list_commands = turtle_parse(input);
 
         //execute the command
-        // status = turtle_execute(args);
+        status = turtle_execute(list_commands);
 
         // clean the memory for the next command
         free(input);
-        // free(args);
+        free(list_commands);
     }
 }
 
