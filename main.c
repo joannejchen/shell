@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,18 +8,8 @@
 #include <termios.h>
 #include <unistd.h>
 #include "commands.h"
+#include "main.h"
 #include "util.h"
-
-#define input_size 1024
-#define args_size 64
-
-int turtle_execute(char** args);
-int turtle_fork(char** args);
-void turtle_init();
-char** turtle_parse(char* input);
-char* turtle_read();
-void turtle_run();
-void turtle_welcome();
 
 int main(int argc, char* argv[], char** envp) {
     // initialize
@@ -51,15 +42,56 @@ int turtle_execute(char** args) {
     } else if (strcmp(args[0], "q") == 0) {
         return turtle_exit();
     } else if (strcmp(args[0], "turtlesay") == 0) {
-        turtlesay(args);
-        return 1;
+        return turtlesay(args);
     } else {
         // launch a new process to handle this command
-        return turtle_fork(args);
+        return turtle_launch(args);
     }
 }
 
-int turtle_fork(char** args) {
+// make sure the shell is running interactively as the foreground job
+// this is needed in order to allow our shell to also be able to run job control
+void turtle_init() {
+    // check if we are running interactively, which is when STDIN is the terminal
+    turtle_terminal = STDIN_FILENO;
+    turtle_is_interactive = isatty(turtle_terminal);
+    
+    if (turtle_is_interactive) {
+        // loop until we are in the foreground
+        while (tcgetpgrp(turtle_terminal) != (turtle_pgid = getpgrp())) {
+            kill(-turtle_pgid, SIGTTIN);
+        }
+
+        // TODO: ignore interactive and job-control signals
+        // signal(SIGINT, SIG_IGN);
+        // signal(SIGQUIT, SIG_IGN);
+        // signal(SIGTSTP, SIG_IGN);
+        // signal(SIGTTIN, SIG_IGN);
+        // signal(SIGTTOU, SIG_IGN);
+        // signal(SIGCHLD, SIG_IGN);
+
+        // put ourselves in our own process group with turtle as the leader
+        turtle_pgid = getpid();
+        if (setpgid(turtle_pgid, turtle_pgid) < 0) {
+            fprintf(stderr, "couldn't put turtle in its own process group\n");
+            exit(1);
+        }
+
+        // take control of the terminal
+        tcsetpgrp(turtle_terminal, turtle_pgid);
+        
+        // save default terminal attributes for the shell
+        tcgetattr(turtle_terminal, &turtle_tmodes);
+
+        // get the current directory
+        cur_directory = (char*)calloc(256, sizeof(char));
+    } else {
+        fprintf(stderr, "couldn't make the turtle interactive\n");
+        exit(1);
+    }
+}
+
+int turtle_launch(char** args) {
     int pid;
     int wait_val;
     int status;
@@ -86,81 +118,73 @@ int turtle_fork(char** args) {
     return 1; // TODO: exit success?
 }
 
-// make sure the shell is running interactively as the foreground job
-// this is needed in order to allow our shell to also be able to run job control
-void turtle_init() {
-    // check if we are running interactively, which is when STDIN is the terminal
-    turtle_terminal = STDIN_FILENO;
-    turtle_is_interactive = isatty(turtle_terminal);
-    
-    if (turtle_is_interactive) {
-        // loop until we are in the foreground
-        while (tcgetpgrp(turtle_terminal) != (turtle_pgid = getpgrp())) {
-            kill(-turtle_pgid, SIGTTIN);
+struct Commands* turtle_parse(char* input) {
+    int num_commands = 0;
+    int input_index = 0;
+
+    // iterate through the input to find how many commands there are
+    while (input[input_index] != '\0') {
+        if (input[input_index] == '|') {
+            num_commands++;
         }
-
-        // ignore interactive and job-control signals
-        signal(SIGINT, SIG_IGN);
-        signal(SIGQUIT, SIG_IGN);
-        signal(SIGTSTP, SIG_IGN);
-        signal(SIGTTIN, SIG_IGN);
-        signal(SIGTTOU, SIG_IGN);
-        signal(SIGCHLD, SIG_IGN);
-
-        // put ourselves in our own process group with turtle as the leader
-        turtle_pgid = getpid();
-        if (setpgid(turtle_pgid, turtle_pgid) < 0) {
-            perror("couldn't put turtle in its own process group\n");
-            exit(1);
-        }
-
-        // take control of the terminal
-        tcsetpgrp(turtle_terminal, turtle_pgid);
-        
-        // save default terminal attributes for the shell
-        tcgetattr(turtle_terminal, &turtle_tmodes);
-
-        // get the current directory
-        cur_directory = (char*)calloc(256, sizeof(char));
-    } else {
-        perror("couldn't make the turtle interactive\n");
-        exit(1);
+        input_index++;
     }
-}
+    num_commands++;
 
-char** turtle_parse(char* input) {
-    int buffer_args = args_size;
-    int arg_index = 0;
-    char** args = malloc(sizeof(char*) * buffer_args);
-    char* cur_arg;
-
-    // determine whether the malloc failed
-    if (!args) {
-        fprintf(stderr, "turtle failed to parse\n");
+    struct Commands* list_commands = calloc(sizeof(struct Commands) + num_commands * sizeof(struct Command*), 1);
+    if (list_commands == NULL) {
+        fprintf(stderr, "turtle failed to allocate memory\n");
         exit(EXIT_FAILURE);
     }
-
-    cur_arg = strtok(input, " \t\r\n\a");
-    while (cur_arg != NULL) {
-        args[arg_index] = cur_arg;
-        arg_index++;
-
-        if (arg_index >= buffer_args) {
-            buffer_args += args_size;
-            args = realloc(args, buffer_args * sizeof(char*));
-            if (!args) {
-                fprintf(stderr, "turtle failed to parse\n");
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        cur_arg = strtok(NULL, " \t\r\n\a");
+    list_commands->cmd_count = num_commands;
+    list_commands->commands = calloc(num_commands * sizeof(struct Command*), 1);
+    
+    char* save;
+    char* cur_command = strtok_r(input, "|", &save);
+    int i = 0;
+    while (cur_command != NULL && i < num_commands) {
+        list_commands->commands[i] = turtle_parse_single(cur_command);
+        cur_command = strtok_r(NULL, "|", &save);
+        i++;
     }
 
-    args[arg_index] = NULL;
-
-    return args;
+    return list_commands;
 }
+
+struct Command* turtle_parse_single(char* command) {
+    int num_args = 0;
+    int command_index = 0;
+    
+    // iterate through the command to find how many args there are
+    while (command[command_index] != '\0') {
+        if (command[command_index] == ' ') {
+            num_args++;
+        }
+        command_index++;
+    }
+    num_args++;
+
+    struct Command* single_command = calloc(sizeof(struct Command) + num_args * sizeof(char*), 1);
+    if (single_command == NULL) {
+        fprintf(stderr, "turtle failed to allocate memory\n");
+        exit(EXIT_FAILURE);
+    }
+    single_command->argc = num_args;
+    single_command->argv = calloc(sizeof(struct Command) * num_args, 1);
+
+    // get token by splitting on whitespace
+    char* cur_arg = strtok(command, " \t\r\n\a");
+    int i = 0;
+    while (cur_arg != NULL && i < num_args) {
+        single_command->argv[i] = cur_arg;
+        cur_arg = strtok(NULL, " \t\r\n\a");
+        i++;
+    }
+    single_command->cmd_name = single_command->argv[0];
+
+    return single_command;
+}
+
 
 char* turtle_read() {
     int buffer_size = input_size;
@@ -217,7 +241,7 @@ char* turtle_read() {
 
 void turtle_run() {
     char* input;
-    char** args;
+    struct Commands* list_commands;
     int status = 1;
     
     while (status) {
@@ -228,14 +252,14 @@ void turtle_run() {
         input = turtle_read();
         
         // parse the string into its command and arguments
-        args = turtle_parse(input);
+        list_commands = turtle_parse(input);
 
         //execute the command
-        status = turtle_execute(args);
+        // status = turtle_execute(args);
 
         // clean the memory for the next command
         free(input);
-        free(args);
+        // free(args);
     }
 }
 

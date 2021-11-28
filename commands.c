@@ -36,7 +36,7 @@ int turtle_help() {
 }
 
 /* turtle say command */
-void turtlesay(char** args) {
+int turtlesay(char** args) {
     printf("\n"); //next line
 
     //determine output string
@@ -79,4 +79,6 @@ void turtlesay(char** args) {
     printf("|_|_| |_|_|\n");
 
     printf("\n");
+    
+    return 1;
 }
