@@ -26,6 +26,20 @@ int main(int argc, char* argv[], char** envp) {
     return EXIT_SUCCESS;
 }
 
+void close_pipes(int (*pipes)[2], int pipe_count) {
+    for (int i = 0; i < pipe_count; i++) {
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+    }
+}
+
+void free_commands(struct Commands* commands) {
+    for (int i = 0; i < commands->cmd_count; i++) {
+        free(commands->commands[i]);
+    }
+    free(commands);
+}
+
 // execute multiple commands (piping them lsif necessary)
 int turtle_execute(struct Commands* commands) {
     int exec_ret;
@@ -35,16 +49,50 @@ int turtle_execute(struct Commands* commands) {
         commands->commands[0]->fds[0] = STDIN_FILENO;
         commands->commands[0]->fds[1] = STDOUT_FILENO;
         exec_ret = turtle_execute_single(commands, commands->commands[0], NULL);
+        wait(NULL);
     }
     // have to handle the commands through piping
     else {
-        exec_ret = -1;
+        int pipe_count = commands->cmd_count - 1;
+        int (*pipes)[2] = calloc(pipe_count * sizeof(int[2]), 1);
+
+        if (pipes == NULL) {
+            fprintf(stderr, "turtle failed to allocate memory\n");
+            return 0;
+        }
+
+        // create all the pipes and set the file descriptors for each command
+        // first command just reads from stdin
+        commands->commands[0]->fds[0] = STDIN_FILENO;
+        for (int i = 1; i < commands->cmd_count; i++) {
+            pipe(pipes[i-1]);
+            // previous command writes to the pipe
+            commands->commands[i-1]->fds[1] = pipes[i-1][1];
+            // the next command reads from the pipe
+            commands->commands[i]->fds[0] = pipes[i-1][0];
+        }
+        // last command just writes to stdout
+        commands->commands[pipe_count]->fds[1] = STDOUT_FILENO;
+
+        // execute the commands
+        for (int i = 0; i < commands->cmd_count; i++) {
+            exec_ret = turtle_execute_single(commands, commands->commands[i], pipes);
+        }
+
+        close_pipes(pipes, pipe_count);
+
+        // make sure all the processes/comamnds have been executed
+        for (int i = 0; i < commands->cmd_count; i++) {
+            wait(NULL);
+        }
+
+        free(pipes);
     }
 
     return exec_ret;
 }
 
-int turtle_execute_single(struct Commands* commands, struct Command* command, int* pipes[2]) {
+int turtle_execute_single(struct Commands* commands, struct Command* command, int (*pipes)[2]) {
     // check if the command is any of the built-ins
     if (strcmp(command->cmd_name, "cd") == 0) {
         return turtle_cd(command->argv);
@@ -76,25 +124,26 @@ int turtle_execute_single(struct Commands* commands, struct Command* command, in
             if (output_fd != -1 && output_fd != STDOUT_FILENO) {
                 dup2(output_fd, STDOUT_FILENO);
             }
-            // check if this command requires piping
+            // check if this command requires piping, and if so, we
+            // can now close the pipes because we have already changed
+            // the input/output fd
             if (pipes != NULL) {
-                // TODO
+                int pipe_count = commands->cmd_count - 1;
+                close_pipes(pipes, pipe_count);
             }
 
             // execute the command
             execvp(command->cmd_name, command->argv);
-            exit(EXIT_FAILURE); // execvp should not return here
-        }
-        // in parent process
-        else {
-            int wait_val;
-            int status;
-            do {
-                wait_val = waitpid(pid, &status, WUNTRACED);
-            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+            fprintf(stderr, "turtle could not find the command\n"); // execvp should not return here
+
+            // clean up memory if we failed to identify a command
+            free(pipes);
+            free_commands(commands);
+
+            _exit(EXIT_FAILURE);
         }
 
-        return 1; // exit success?
+        return pid; // exit success?
     }
 
 }
@@ -282,7 +331,7 @@ void turtle_run() {
 
         // clean the memory for the next command
         free(input);
-        free(list_commands);
+        free_commands(list_commands);
     }
 }
 

@@ -14,8 +14,10 @@ struct Commands {
 
 };
 
+void close_pipes(int (*pipes)[2], int pipe_count);
+void free_commands(struct Commands* commands);
 int turtle_execute(struct Commands* commands);
-int turtle_execute_single(struct Commands* commands, struct Command* command, int* pipes[2]);
+int turtle_execute_single(struct Commands* commands, struct Command* command, int (*pipes)[2]);
 void turtle_init();
 struct Commands* turtle_parse(char* input);
 struct Command* turtle_parse_single(char* command);
