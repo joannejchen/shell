@@ -11,6 +11,10 @@
 #include "main.h"
 #include "util.h"
 
+uint32_t first_color = 0;
+uint32_t second_color = 0;
+uint32_t third_color = 0;
+
 int main(int argc, char* argv[], char** envp) {
     // initialize
     turtle_init();
@@ -102,6 +106,9 @@ int turtle_execute_single(struct Commands* commands, struct Command* command, in
         return turtle_help();
     } else if (strcmp(command->cmd_name, "turtlesay") == 0) {
         return turtlesay(command->argv);
+    } else if(strcmp(command->cmd_name, "theme") == 0) {
+        turtle_theme(command->argv);
+        return 1;
     }
     // otherwise, fork the process and launch
     else {
@@ -318,8 +325,14 @@ void turtle_run() {
     
     while (status) {
         // print the prompt in the form of user@turtle/cwd $
-        printf("%s@turtle %s $ ", getenv("LOGNAME"), getcwd(cur_directory, 4096));
+        set_text(first_color);
+        printf("%s@turtle %s ", getenv("LOGNAME"), getcwd(cur_directory, 4096));
         
+        set_text(second_color);
+        printf("$ ");
+
+        set_text(third_color);
+
         // read the user's command(s) from standard input
         input = turtle_read();
         

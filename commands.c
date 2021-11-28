@@ -35,6 +35,43 @@ int turtle_help() {
     return 1;
 }
 
+/* change theme of shell */
+void turtle_theme(char** args) {
+    if(strcmp(args[1], "help") == 0) turtle_theme_help();
+    else if(strcmp(args[1], "reset") == 0) set_theme(0, 0, 0);
+    else if(strcmp(args[1], "red") == 0) set_theme(31, 31, 31);
+    else if(strcmp(args[1], "yellow") == 0) set_theme(33, 33, 33);
+    else if(strcmp(args[1], "green") == 0) set_theme(32, 32, 32);
+    else if(strcmp(args[1], "lightblue") == 0) set_theme(36, 36, 36);
+    else if(strcmp(args[1], "darkblue") == 0) set_theme(34, 34, 34);
+    else if(strcmp(args[1], "purple") == 0) set_theme(35, 35, 34);
+    else if(strcmp(args[1], "turtle") == 0) set_theme(34, 36, 32);
+    else { //invalid theme
+        fprintf(stderr, "turtle: invalid theme name\n");
+    }
+}
+
+void turtle_theme_help() {
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    printf("hey there!\n");
+    printf("to change your shell theme, type theme followed by the name of one of the themes below: \n");
+    set_text(31);
+    printf("red\n");
+    set_text(33);
+    printf("yellow\n");
+    set_text(32);
+    printf("green\n");
+    set_text(36);
+    printf("lightblue\n");
+    set_text(34);
+    printf("darkblue\n");
+    set_text(35);
+    printf("purple\n");
+    set_text(0);
+    printf("to reset your theme to the default, type theme reset\n");
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+}
+
 /* turtle say command */
 int turtlesay(char** args) {
     printf("\n"); //next line
@@ -81,4 +118,12 @@ int turtlesay(char** args) {
     printf("\n");
     
     return 1;
+}
+
+void set_text(uint32_t color) { printf("\033[1;%dm", color); }
+
+void set_theme(uint32_t first, uint32_t second, uint32_t third) {
+    first_color = first;
+    second_color = second;
+    third_color = third;
 }
