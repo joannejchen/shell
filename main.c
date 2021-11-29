@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,8 +51,6 @@ int turtle_execute(struct Commands* commands) {
 
     // if this is just a single command, then we can run it as normal
     if (commands->cmd_count == 1) {
-        commands->commands[0]->fds[0] = STDIN_FILENO;
-        commands->commands[0]->fds[1] = STDOUT_FILENO;
         exec_ret = turtle_execute_single(commands, commands->commands[0], NULL);
         wait(NULL);
     }
@@ -235,9 +234,13 @@ struct Command* turtle_parse_single(char* command) {
     int command_index = 0;
     
     // iterate through the command to find how many args there are
+    int output_redirection = -1;
     while (command[command_index] != '\0') {
         if (command[command_index] == ' ') {
             num_args++;
+        }
+        if (command[command_index] == '>') {
+            output_redirection = command_index;
         }
         command_index++;
     }
@@ -251,8 +254,19 @@ struct Command* turtle_parse_single(char* command) {
     single_command->argc = num_args;
     single_command->argv = calloc(sizeof(struct Command) * num_args, 1);
 
+    // only extract the command portion if there is IO redirection
+    int length_of_command = 0;
+    if (output_redirection == -1) {
+        length_of_command = strlen(command) + 1;
+    } else {
+        length_of_command = output_redirection + 1;
+    }
+    char* temp_command = calloc(sizeof(char) * length_of_command, 1);
+    memcpy(temp_command, command, length_of_command - 1);
+    temp_command[length_of_command] = '\0';
+
     // get token by splitting on whitespace
-    char* cur_arg = strtok(command, " \t\r\n\a");
+    char* cur_arg = strtok(temp_command, " \t\r\n\a");
     int i = 0;
     while (cur_arg != NULL && i < num_args) {
         single_command->argv[i] = cur_arg;
@@ -260,6 +274,24 @@ struct Command* turtle_parse_single(char* command) {
         i++;
     }
     single_command->cmd_name = single_command->argv[0];
+
+    // handle output redirection
+    if (output_redirection != -1) {
+        output_redirection++;
+        while (command[output_redirection] == ' ') {
+            output_redirection++;
+        }
+        char* output_file = calloc(sizeof(char) * (strlen(command) - output_redirection), 1);
+        memcpy(output_file, command + output_redirection, strlen(command) - output_redirection);
+        int new_output_fd = open(output_file, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+        single_command->fds[1] = new_output_fd;
+    }
+    // no output redirection, default input/output is stdin
+    else {
+        single_command->fds[0] = STDIN_FILENO;
+        single_command->fds[1] = STDOUT_FILENO;
+    }
+
 
     return single_command;
 }
