@@ -5,6 +5,17 @@
 
 #include "commands.h"
 
+#define RESET 0
+#define BLK 30
+#define RED 31
+#define GRN 32
+#define YEL 33
+#define BLU 34
+#define MAG 35
+#define CYN 36
+#define WHT 37
+#define HGRN 92
+
 /* change directory */
 int turtle_cd(char** args) {
     //check for invalid input
@@ -38,14 +49,18 @@ int turtle_help() {
 /* change theme of shell */
 void turtle_theme(char** args) {
     if(strcmp(args[1], "help") == 0) turtle_theme_help();
-    else if(strcmp(args[1], "reset") == 0) set_theme(0, 0, 0);
-    else if(strcmp(args[1], "red") == 0) set_theme(31, 31, 31);
-    else if(strcmp(args[1], "yellow") == 0) set_theme(33, 33, 33);
-    else if(strcmp(args[1], "green") == 0) set_theme(32, 32, 32);
-    else if(strcmp(args[1], "lightblue") == 0) set_theme(36, 36, 36);
-    else if(strcmp(args[1], "darkblue") == 0) set_theme(34, 34, 34);
-    else if(strcmp(args[1], "purple") == 0) set_theme(35, 35, 34);
-    else if(strcmp(args[1], "turtle") == 0) set_theme(34, 36, 32);
+    else if(strcmp(args[1], "reset") == 0) set_theme(RESET, RESET, RESET);
+    else if(strcmp(args[1], "red") == 0) set_theme(RED, RED, RED);
+    else if(strcmp(args[1], "yellow") == 0) set_theme(YEL, YEL, YEL);
+    else if(strcmp(args[1], "green") == 0) set_theme(GRN, GRN, GRN);
+    else if(strcmp(args[1], "cyan") == 0) set_theme(CYN, CYN, CYN);
+    else if(strcmp(args[1], "blue") == 0) set_theme(BLU, BLU, BLU);
+    else if(strcmp(args[1], "magenta") == 0) set_theme(MAG, MAG, MAG);
+    else if(strcmp(args[1], "turtle") == 0) set_theme(GRN, BLU, CYN);
+    else if(strcmp(args[1], "summer") == 0) set_theme(YEL, MAG, CYN);
+    else if(strcmp(args[1], "winter") == 0) set_theme(BLU, CYN, WHT);
+    else if(strcmp(args[1], "christmas") == 0) set_theme(RED, GRN, YEL);
+    else if(strcmp(args[1], "hanukkah") == 0) set_theme(BLU, CYN, YEL);
     else { //invalid theme
         fprintf(stderr, "turtle: invalid theme name\n");
     }
@@ -55,19 +70,18 @@ void turtle_theme_help() {
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     printf("hey there!\n");
     printf("to change your shell theme, type theme followed by the name of one of the themes below: \n");
-    set_text(31);
-    printf("red\n");
-    set_text(33);
-    printf("yellow\n");
-    set_text(32);
-    printf("green\n");
-    set_text(36);
-    printf("lightblue\n");
-    set_text(34);
-    printf("darkblue\n");
-    set_text(35);
-    printf("purple\n");
-    set_text(0);
+    printf("\033[1;%dm red\n", RED);
+    printf("\033[1;%dm yellow\n", YEL);
+    printf("\033[1;%dm green\n", GRN);
+    printf("\033[1;%dm cyan\n", CYN);
+    printf("\033[1;%dm blue\n", BLU);
+    printf("\033[1;%dm magenta\n", MAG);
+    printf("\033[1;%dm tu\033[1;%dmrt\033[1;%dmle\n", GRN, BLU, CYN); //turtle
+    printf("\033[1;%dm su\033[1;%dmmm\033[1;%dmer\n", YEL, MAG, CYN); //summer
+    printf("\033[1;%dm wi\033[1;%dmnt\033[1;%dmer\n", BLU, CYN, WHT); //winter
+    printf("\033[1;%dm chr\033[1;%dmist\033[1;%dmmas\n", RED, GRN, YEL); //christmas
+    printf("\033[1;%dm han\033[1;%dmuk\033[1;%dmkah\n", BLU, CYN, YEL); //hanukkah
+    set_text(RESET);
     printf("to reset your theme to the default, type theme reset\n");
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }

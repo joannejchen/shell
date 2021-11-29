@@ -108,9 +108,12 @@ int turtle_execute_single(struct Commands* commands, struct Command* command, in
     } else if(strcmp(command->cmd_name, "theme") == 0) {
         turtle_theme(command->argv);
         return 1;
-    }
+    } 
     // otherwise, fork the process and launch
     else {
+        //check if command is assigning variable
+        if(putenv(command->argv[0]) == 0) return 1;
+
         int pid = fork();
 
         // fork failed
@@ -269,7 +272,12 @@ struct Command* turtle_parse_single(char* command) {
     char* cur_arg = strtok(temp_command, " \t\r\n\a");
     int i = 0;
     while (cur_arg != NULL && i < num_args) {
-        single_command->argv[i] = cur_arg;
+        //check if arg starts with $
+        if(cur_arg[0] == 36) {
+            single_command->argv[i] = getenv(&(cur_arg[1]));
+        } else {
+            single_command->argv[i] = cur_arg;
+        }
         cur_arg = strtok(NULL, " \t\r\n\a");
         i++;
     }
@@ -325,7 +333,7 @@ char* turtle_read() {
                 buffer[index] = '\0';
                 return buffer;
             } else {
-                index--;
+                index-=2;
                 printf("> ");
             }
         }
@@ -358,10 +366,10 @@ void turtle_run() {
     while (status) {
         // print the prompt in the form of user@turtle/cwd $
         set_text(first_color);
-        printf("%s@turtle %s ", getenv("LOGNAME"), getcwd(cur_directory, 4096));
+        printf("%s@turtle ", getenv("LOGNAME"));
         
         set_text(second_color);
-        printf("$ ");
+        printf("%s $ ", getcwd(cur_directory, 4096));
 
         set_text(third_color);
 
