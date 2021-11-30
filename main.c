@@ -268,10 +268,19 @@ struct Command* turtle_parse_single(char* command) {
 
     // only extract the command portion if there is IO redirection
     int length_of_command = 0;
-    if (output_redirection == -1) {
+    if (output_redirection == -1 && input_redirection == -1) {
         length_of_command = strlen(command) + 1;
-    } else {
+    } else if (output_redirection == -1) {
+        length_of_command = input_redirection + 1;
+    } else if (input_redirection == -1) {
         length_of_command = output_redirection + 1;
+    }
+    else {
+        if (input_redirection < output_redirection) {
+            length_of_command = input_redirection + 1;
+        } else {
+            length_of_command = output_redirection + 1;
+        }
     }
     char* temp_command = calloc(sizeof(char) * length_of_command, 1);
     memcpy(temp_command, command, length_of_command - 1);
@@ -292,6 +301,11 @@ struct Command* turtle_parse_single(char* command) {
     }
     single_command->cmd_name = single_command->argv[0];
 
+    // no output redirection, default input/output is stdin
+    if (output_redirection == -1 || input_redirection == -1) {
+        single_command->fds[0] = STDIN_FILENO;
+        single_command->fds[1] = STDOUT_FILENO;
+    }
     // handle output redirection
     if (output_redirection != -1) {
         output_redirection++;
@@ -307,10 +321,8 @@ struct Command* turtle_parse_single(char* command) {
             && command[end_of_output_redirection] != 0) {
             end_of_output_redirection++;
         }
-        printf("output_start: %d output_end: %d\n", output_redirection, end_of_output_redirection);
         char* output_file = calloc(sizeof(char) * (end_of_output_redirection - output_redirection), 1);
         memcpy(output_file, command + output_redirection, end_of_output_redirection - output_redirection);
-        printf("output file: %s\n", output_file);
         int new_output_fd = open(output_file, O_CREAT | O_TRUNC | O_WRONLY, 0600);
         single_command->fds[1] = new_output_fd;
     }
@@ -331,13 +343,8 @@ struct Command* turtle_parse_single(char* command) {
         }
         char* input_file = calloc(sizeof(char) * (end_of_input_redirection - input_redirection), 1);
         memcpy(input_file, command + input_redirection, end_of_input_redirection - input_redirection);
-        int new_input_fd = open(input_file, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+        int new_input_fd = open(input_file, O_RDONLY, 0600);
         single_command->fds[0] = new_input_fd;
-    }
-    // no output redirection, default input/output is stdin
-    if (output_redirection == -1 && input_redirection == -1) {
-        single_command->fds[0] = STDIN_FILENO;
-        single_command->fds[1] = STDOUT_FILENO;
     }
 
     return single_command;
