@@ -238,12 +238,16 @@ struct Command* turtle_parse_single(char* command) {
     
     // iterate through the command to find how many args there are
     int output_redirection = -1;
+    int input_redirection = -1;
     while (command[command_index] != '\0') {
         if (command[command_index] == ' ') {
             num_args++;
         }
         if (command[command_index] == '>') {
             output_redirection = command_index;
+        }
+        if (command[command_index] == '<') {
+            input_redirection = command_index;
         }
         command_index++;
     }
@@ -289,13 +293,44 @@ struct Command* turtle_parse_single(char* command) {
         while (command[output_redirection] == ' ') {
             output_redirection++;
         }
-        char* output_file = calloc(sizeof(char) * (strlen(command) - output_redirection), 1);
-        memcpy(output_file, command + output_redirection, strlen(command) - output_redirection);
+        int end_of_output_redirection = output_redirection;
+        while(command[end_of_output_redirection] != ' '
+            && command[end_of_output_redirection] != '\t'
+            && command[end_of_output_redirection] != '\r'
+            && command[end_of_output_redirection] != '\n'
+            && command[end_of_output_redirection] != '\a'
+            && command[end_of_output_redirection] != 0) {
+            end_of_output_redirection++;
+        }
+        printf("output_start: %d output_end: %d\n", output_redirection, end_of_output_redirection);
+        char* output_file = calloc(sizeof(char) * (end_of_output_redirection - output_redirection), 1);
+        memcpy(output_file, command + output_redirection, end_of_output_redirection - output_redirection);
+        printf("output file: %s\n", output_file);
         int new_output_fd = open(output_file, O_CREAT | O_TRUNC | O_WRONLY, 0600);
         single_command->fds[1] = new_output_fd;
     }
+    // handle input redirection
+    if (input_redirection != -1) {
+        input_redirection++;
+        while (command[input_redirection] == ' ') {
+            input_redirection++;
+        }
+        int end_of_input_redirection = input_redirection;
+        while(command[end_of_input_redirection] != ' '
+            && command[end_of_input_redirection] != '\t'
+            && command[end_of_input_redirection] != '\r'
+            && command[end_of_input_redirection] != '\n'
+            && command[end_of_input_redirection] != '\a'
+            && command[end_of_input_redirection] != 0) {
+            end_of_input_redirection++;
+        }
+        char* input_file = calloc(sizeof(char) * (end_of_input_redirection - input_redirection), 1);
+        memcpy(input_file, command + input_redirection, end_of_input_redirection - input_redirection);
+        int new_input_fd = open(input_file, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+        single_command->fds[0] = new_input_fd;
+    }
     // no output redirection, default input/output is stdin
-    else {
+    if (output_redirection == -1 && input_redirection == -1) {
         single_command->fds[0] = STDIN_FILENO;
         single_command->fds[1] = STDOUT_FILENO;
     }
