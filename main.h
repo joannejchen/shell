@@ -14,8 +14,13 @@ struct Commands {
 
 };
 
+struct sigaction act_int;
+
+pid_t pid;
+
 void close_pipes(int (*pipes)[2], int pipe_count);
 void free_commands(struct Commands* commands);
+void signal_handler_int(int p);
 int turtle_execute(struct Commands* commands);
 int turtle_execute_single(struct Commands* commands, struct Command* command, int (*pipes)[2]);
 void turtle_init();

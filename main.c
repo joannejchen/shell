@@ -18,6 +18,7 @@ uint32_t third_color = 0;
 
 int main(int argc, char* argv[], char** envp) {
     // initialize
+    pid = -10;
     turtle_init();
     turtle_welcome();
     environ = envp;
@@ -43,6 +44,14 @@ void free_commands(struct Commands* commands) {
         free(commands->commands[i]);
     }
     free(commands);
+}
+
+void signal_handler_int(int p) {
+    if (kill(pid, SIGTERM) == 0) {
+        printf("\nturtle received a SIGINT signal\n");
+    } else {
+        printf("\n");
+    }
 }
 
 // execute multiple commands (piping them lsif necessary)
@@ -114,7 +123,7 @@ int turtle_execute_single(struct Commands* commands, struct Command* command, in
         //check if command is assigning variable
         if(putenv(command->argv[0]) == 0) return 1;
 
-        int pid = fork();
+        pid = fork();
 
         // fork failed
         if (pid == -1) {
@@ -170,13 +179,9 @@ void turtle_init() {
             kill(-turtle_pgid, SIGTTIN);
         }
 
-        // TODO: ignore interactive and job-control signals
-        // signal(SIGINT, SIG_IGN);
-        // signal(SIGQUIT, SIG_IGN);
-        // signal(SIGTSTP, SIG_IGN);
-        // signal(SIGTTIN, SIG_IGN);
-        // signal(SIGTTOU, SIG_IGN);
-        // signal(SIGCHLD, SIG_IGN);
+        // handle signals
+        act_int.sa_handler = signal_handler_int;
+        sigaction(SIGINT, &act_int, 0);
 
         // put ourselves in our own process group with turtle as the leader
         turtle_pgid = getpid();
@@ -334,7 +339,6 @@ struct Command* turtle_parse_single(char* command) {
         single_command->fds[0] = STDIN_FILENO;
         single_command->fds[1] = STDOUT_FILENO;
     }
-
 
     return single_command;
 }
