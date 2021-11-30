@@ -14,6 +14,13 @@ struct Commands {
 
 };
 
+struct History {
+    struct History* turtle_next;
+    char* history_command;
+};
+
+struct History* turtle_head;
+
 struct sigaction act_int;
 
 pid_t pid;

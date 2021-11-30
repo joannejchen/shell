@@ -117,7 +117,9 @@ int turtle_execute_single(struct Commands* commands, struct Command* command, in
     } else if(strcmp(command->cmd_name, "theme") == 0) {
         turtle_theme(command->argv);
         return 1;
-    } 
+    } else if (strcmp(command->cmd_name, "history") == 0) {
+        return turtle_history();
+    }
     // otherwise, fork the process and launch
     else {
         //check if command is assigning variable
@@ -370,6 +372,16 @@ char* turtle_read() {
         // check if this char is the last character
         if (letter == EOF) {
             buffer[index] = '\0'; // null terminate strings
+
+            // copy this string into the history
+            struct History* new_command = calloc(sizeof(struct History*), 1);
+            new_command->history_command = calloc(sizeof(char) * strlen(buffer), 1);
+            strcpy(new_command->history_command, buffer);
+            if (turtle_head != NULL) {
+                new_command->turtle_next = turtle_head;
+            }
+            turtle_head = new_command;
+
             return buffer;
         }
         // handle special newline case
@@ -377,6 +389,16 @@ char* turtle_read() {
             // be able to handle multiple lines of input
             if (index == 0 || buffer[index-1] != '\\') {
                 buffer[index] = '\0';
+
+                // copy this string into the history
+                struct History* new_command = calloc(sizeof(struct History*), 1);
+                new_command->history_command = calloc(sizeof(char) * strlen(buffer), 1);
+                strcpy(new_command->history_command, buffer);
+                if (turtle_head != NULL) {
+                    new_command->turtle_next = turtle_head;
+                }
+                turtle_head = new_command;
+
                 return buffer;
             } else {
                 index-=2;

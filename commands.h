@@ -7,6 +7,7 @@ extern uint32_t third_color;
 extern int turtle_cd(char** args);
 extern int turtle_exit();
 extern int turtle_help();
+extern int turtle_history();
 extern int turtlesay(char** args);
 void turtle_theme(char** args);
 void turtle_theme_help();

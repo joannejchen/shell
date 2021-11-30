@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "commands.h"
+#include "main.h"
 
 #define RESET 0
 #define BLK 30
@@ -44,6 +45,45 @@ int turtle_help() {
     printf("\tturtlesay\n");
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     return 1;
+}
+
+int turtle_history() {
+    int i = 0;
+    struct History* current = turtle_head;
+    while (i < 5 && current != NULL) {
+        printf("[%d] %s\n", i, current->history_command);
+        current = current->turtle_next;
+        i++;
+    }
+
+    printf("enter command number > ");
+    int letter;
+    int index = 0;
+    char* buffer = malloc(sizeof(char) * 2);
+    while (1) {
+        letter = getchar();
+        if (letter == EOF || letter == '\n' || letter == '\r') {
+            break;
+        }
+        buffer[index] = letter;
+        index++;
+    }
+    buffer[index] = 0;
+    letter = atoi(buffer);
+
+    // find the command with that number
+    i = 0;
+    current = turtle_head;
+    while (i < letter && current != NULL) {
+        current = current->turtle_next;
+        i++;
+    }
+
+    struct Commands* list_commands = turtle_parse(current->history_command);
+
+    int status = turtle_execute(list_commands);
+    
+    return status;
 }
 
 /* change theme of shell */
