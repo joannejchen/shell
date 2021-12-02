@@ -31,6 +31,7 @@ int turtle_cd(char** args) {
 
 /* exits the shell */
 int turtle_exit() {
+    set_text(0);
     return 0;
 }
 
