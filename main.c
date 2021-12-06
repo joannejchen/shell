@@ -1,360 +1,100 @@
-#include <ctype.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <termios.h>
-#include <unistd.h>
 #include "commands.h"
 #include "main.h"
-#include "util.h"
 
-uint32_t first_color = 0;
-uint32_t second_color = 0;
-uint32_t third_color = 0;
+int first_color = 0;
+int second_color = 0;
+int third_color = 0;
 
-int main(int argc, char* argv[], char** envp) {
+int main(int argc, char** argv) {
     // initialize
-    pid = -10;
     turtle_init();
     turtle_welcome();
-    environ = envp;
-    setenv("shell", getcwd(cur_directory, 4096), 1);
 
-    // run command loop.
+    // run command loop
     turtle_run();
 
-    // perform shutdown/cleanup
-
+    // perform shutdown
     return EXIT_SUCCESS;
-}
-
-void close_pipes(int (*pipes)[2], int pipe_count) {
-    for (int i = 0; i < pipe_count; i++) {
-        close(pipes[i][0]);
-        close(pipes[i][1]);
-    }
-}
-
-void free_commands(struct Commands* commands) {
-    for (int i = 0; i < commands->cmd_count; i++) {
-        free(commands->commands[i]);
-    }
-    free(commands);
-}
-
-void signal_handler_int(int p) {
-    if (kill(pid, SIGTERM) == 0) {
-        printf("\nturtle received a SIGINT signal\n");
-    } else {
-        printf("\n");
-    }
-}
-
-// execute multiple commands (piping them lsif necessary)
-int turtle_execute(struct Commands* commands) {
-    int exec_ret;
-
-    // if this is just a single command, then we can run it as normal
-    if (commands->cmd_count == 1) {
-        exec_ret = turtle_execute_single(commands, commands->commands[0], NULL);
-        wait(NULL);
-    }
-    // have to handle the commands through piping
-    else {
-        int pipe_count = commands->cmd_count - 1;
-        int (*pipes)[2] = calloc(pipe_count * sizeof(int[2]), 1);
-
-        if (pipes == NULL) {
-            fprintf(stderr, "turtle failed to allocate memory\n");
-            return 0;
-        }
-
-        // create all the pipes and set the file descriptors for each command
-        // first command just reads from stdin
-        commands->commands[0]->fds[0] = STDIN_FILENO;
-        for (int i = 1; i < commands->cmd_count; i++) {
-            pipe(pipes[i-1]);
-            // previous command writes to the pipe
-            commands->commands[i-1]->fds[1] = pipes[i-1][1];
-            // the next command reads from the pipe
-            commands->commands[i]->fds[0] = pipes[i-1][0];
-        }
-        // last command just writes to stdout
-        commands->commands[pipe_count]->fds[1] = STDOUT_FILENO;
-
-        // execute the commands
-        for (int i = 0; i < commands->cmd_count; i++) {
-            exec_ret = turtle_execute_single(commands, commands->commands[i], pipes);
-        }
-
-        close_pipes(pipes, pipe_count);
-
-        // make sure all the processes/comamnds have been executed
-        for (int i = 0; i < commands->cmd_count; i++) {
-            wait(NULL);
-        }
-
-        free(pipes);
-    }
-
-    return exec_ret;
-}
-
-int turtle_execute_single(struct Commands* commands, struct Command* command, int (*pipes)[2]) {
-    // check if the command is any of the built-ins
-    if (strcmp(command->cmd_name, "cd") == 0) {
-        return turtle_cd(command->argv);
-    } else if (strcmp(command->cmd_name, "exit") == 0 || strcmp(command->cmd_name, "q") == 0) {
-        return turtle_exit();
-    } else if (strcmp(command->cmd_name, "help") == 0) {
-        return turtle_help();
-    } else if (strcmp(command->cmd_name, "turtlesay") == 0) {
-        return turtlesay(command->argv);
-    } else if(strcmp(command->cmd_name, "theme") == 0) {
-        turtle_theme(command->argv);
-        return 1;
-    } else if (strcmp(command->cmd_name, "history") == 0) {
-        return turtle_history();
-    }
-    // otherwise, fork the process and launch
-    else {
-        //check if command is assigning variable
-        if(putenv(command->argv[0]) == 0) return 1;
-
-        pid = fork();
-
-        // fork failed
-        if (pid == -1) {
-            fprintf(stderr, "turtle failed to fork process");
-        }
-        // in child process
-        else if (pid == 0) {
-            int input_fd = command->fds[0];
-            int output_fd = command->fds[1];
-
-            // change input file descriptor if it isn't std
-            if (input_fd != -1 && input_fd != STDIN_FILENO) {
-                dup2(input_fd, STDIN_FILENO);
-            }
-            // change output file descriptor if it isn't std
-            if (output_fd != -1 && output_fd != STDOUT_FILENO) {
-                dup2(output_fd, STDOUT_FILENO);
-            }
-            // check if this command requires piping, and if so, we
-            // can now close the pipes because we have already changed
-            // the input/output fd
-            if (pipes != NULL) {
-                int pipe_count = commands->cmd_count - 1;
-                close_pipes(pipes, pipe_count);
-            }
-
-            // execute the command
-            execvp(command->cmd_name, command->argv);
-            fprintf(stderr, "turtle could not find the command\n"); // execvp should not return here
-
-            // clean up memory if we failed to identify a command
-            free(pipes);
-            free_commands(commands);
-
-            _exit(EXIT_FAILURE);
-        }
-
-        return pid; // exit success?
-    }
-
 }
 
 // make sure the shell is running interactively as the foreground job
 // this is needed in order to allow our shell to also be able to run job control
 void turtle_init() {
-    // check if we are running interactively, which is when STDIN is the terminal
+    // check if we are running interactively (i.e. when STDIN is the terminal)
     turtle_terminal = STDIN_FILENO;
     turtle_is_interactive = isatty(turtle_terminal);
-    
+
     if (turtle_is_interactive) {
         // loop until we are in the foreground
         while (tcgetpgrp(turtle_terminal) != (turtle_pgid = getpgrp())) {
-            kill(-turtle_pgid, SIGTTIN);
+            kill (-turtle_pgid, SIGTTIN);
         }
 
-        // handle signals
-        act_int.sa_handler = signal_handler_int;
+        // set signals for the default shell window
+        act_int.sa_handler = sigint_handler;
         sigaction(SIGINT, &act_int, 0);
+        signal(SIGQUIT, SIG_IGN);
+        signal(SIGTSTP, SIG_IGN);
+        signal(SIGTTIN, SIG_IGN);
 
-        // put ourselves in our own process group with turtle as the leader
-        turtle_pgid = getpid();
-        if (setpgid(turtle_pgid, turtle_pgid) < 0) {
-            fprintf(stderr, "couldn't put turtle in its own process group\n");
-            exit(1);
+        // put turtle in a process group and take control of terminal
+        pid_t pid = getpid();
+        setpgid(pid, pid);
+        tcsetpgrp(0, pid);
+
+        // set up information for the shell
+        shell = calloc(sizeof(struct shell_info), 1);
+        getlogin_r(shell->user, sizeof(shell->user));
+        struct passwd *temp_pw = getpwuid(getuid());
+        strcpy(shell->pw_dir, temp_pw->pw_dir);
+        getcwd(shell->dir, sizeof(shell->dir));
+        for (int i = 0; i < MAX_NUM_JOBS; i++) {
+            shell->jobs[i] = NULL;
         }
-
-        // take control of the terminal
-        tcsetpgrp(turtle_terminal, turtle_pgid);
-        
-        // save default terminal attributes for the shell
-        tcgetattr(turtle_terminal, &turtle_tmodes);
-
-        // get the current directory
-        cur_directory = (char*)calloc(256, sizeof(char));
-    } else {
-        fprintf(stderr, "couldn't make the turtle interactive\n");
-        exit(1);
     }
 }
 
-struct Commands* turtle_parse(char* input) {
-    int num_commands = 0;
-    int input_index = 0;
-
-    // iterate through the input to find how many commands there are
-    while (input[input_index] != '\0') {
-        if (input[input_index] == '|') {
-            num_commands++;
-        }
-        input_index++;
-    }
-    num_commands++;
-
-    struct Commands* list_commands = calloc(sizeof(struct Commands) + num_commands * sizeof(struct Command*), 1);
-    if (list_commands == NULL) {
-        fprintf(stderr, "turtle failed to allocate memory\n");
-        exit(EXIT_FAILURE);
-    }
-    list_commands->cmd_count = num_commands;
-    list_commands->commands = calloc(num_commands * sizeof(struct Command*), 1);
-    
-    char* save;
-    char* cur_command = strtok_r(input, "|", &save);
-    int i = 0;
-    while (cur_command != NULL && i < num_commands) {
-        list_commands->commands[i] = turtle_parse_single(cur_command);
-        cur_command = strtok_r(NULL, "|", &save);
-        i++;
-    }
-
-    return list_commands;
+// default handler when trying to ctrl-c in the terminal
+void sigint_handler(int signal) {
+    printf("\n");
 }
 
-struct Command* turtle_parse_single(char* command) {
-    int num_args = 0;
-    int command_index = 0;
-    
-    // iterate through the command to find how many args there are
-    int output_redirection = -1;
-    int input_redirection = -1;
-    while (command[command_index] != '\0') {
-        if (command[command_index] == ' ') {
-            num_args++;
-        }
-        if (command[command_index] == '>') {
-            output_redirection = command_index;
-        }
-        if (command[command_index] == '<') {
-            input_redirection = command_index;
-        }
-        command_index++;
-    }
-    num_args++;
-
-    struct Command* single_command = calloc(sizeof(struct Command) + num_args * sizeof(char*), 1);
-    if (single_command == NULL) {
-        fprintf(stderr, "turtle failed to allocate memory\n");
-        exit(EXIT_FAILURE);
-    }
-    single_command->argc = num_args;
-    single_command->argv = calloc(sizeof(struct Command) * num_args, 1);
-
-    // only extract the command portion if there is IO redirection
-    int length_of_command = 0;
-    if (output_redirection == -1 && input_redirection == -1) {
-        length_of_command = strlen(command) + 1;
-    } else if (output_redirection == -1) {
-        length_of_command = input_redirection + 1;
-    } else if (input_redirection == -1) {
-        length_of_command = output_redirection + 1;
-    }
-    else {
-        if (input_redirection < output_redirection) {
-            length_of_command = input_redirection + 1;
-        } else {
-            length_of_command = output_redirection + 1;
-        }
-    }
-    char* temp_command = calloc(sizeof(char) * length_of_command, 1);
-    memcpy(temp_command, command, length_of_command - 1);
-    temp_command[length_of_command] = '\0';
-
-    // get token by splitting on whitespace
-    char* cur_arg = strtok(temp_command, " \t\r\n\a");
-    int i = 0;
-    while (cur_arg != NULL && i < num_args) {
-        //check if arg starts with $
-        if(cur_arg[0] == 36) {
-            single_command->argv[i] = getenv(&(cur_arg[1]));
-        } else {
-            single_command->argv[i] = cur_arg;
-        }
-        cur_arg = strtok(NULL, " \t\r\n\a");
-        i++;
-    }
-    single_command->cmd_name = single_command->argv[0];
-
-    // no output redirection, default input/output is stdin
-    if (output_redirection == -1 || input_redirection == -1) {
-        single_command->fds[0] = STDIN_FILENO;
-        single_command->fds[1] = STDOUT_FILENO;
-    }
-    // handle output redirection
-    if (output_redirection != -1) {
-        output_redirection++;
-        while (command[output_redirection] == ' ') {
-            output_redirection++;
-        }
-        int end_of_output_redirection = output_redirection;
-        while(command[end_of_output_redirection] != ' '
-            && command[end_of_output_redirection] != '\t'
-            && command[end_of_output_redirection] != '\r'
-            && command[end_of_output_redirection] != '\n'
-            && command[end_of_output_redirection] != '\a'
-            && command[end_of_output_redirection] != 0) {
-            end_of_output_redirection++;
-        }
-        char* output_file = calloc(sizeof(char) * (end_of_output_redirection - output_redirection), 1);
-        memcpy(output_file, command + output_redirection, end_of_output_redirection - output_redirection);
-        int new_output_fd = open(output_file, O_CREAT | O_TRUNC | O_WRONLY, 0600);
-        single_command->fds[1] = new_output_fd;
-    }
-    // handle input redirection
-    if (input_redirection != -1) {
-        input_redirection++;
-        while (command[input_redirection] == ' ') {
-            input_redirection++;
-        }
-        int end_of_input_redirection = input_redirection;
-        while(command[end_of_input_redirection] != ' '
-            && command[end_of_input_redirection] != '\t'
-            && command[end_of_input_redirection] != '\r'
-            && command[end_of_input_redirection] != '\n'
-            && command[end_of_input_redirection] != '\a'
-            && command[end_of_input_redirection] != 0) {
-            end_of_input_redirection++;
-        }
-        char* input_file = calloc(sizeof(char) * (end_of_input_redirection - input_redirection), 1);
-        memcpy(input_file, command + input_redirection, end_of_input_redirection - input_redirection);
-        int new_input_fd = open(input_file, O_RDONLY, 0600);
-        single_command->fds[0] = new_input_fd;
-    }
-
-    return single_command;
+void turtle_welcome() {
+    printf("------------------------------------------------------\n");
+    printf("        you have stumbled on the turtle!\n\n");
+    printf("\t                    __\n");
+    printf("\t         .,-;-;-,. /'_\\\n");
+    printf("\t       _/_/_/_|_\\_\\) /\n");
+    printf("\t     '-<_><_><_><_>=/\\\n");
+    printf("\t       `/_/====/_/-'\\_\\\n");
+    printf("\t        \"\"     \"\"    \"\"\n");
+    printf("\n    have fun interacting with the turtle!\n");
+    printf("------------------------------------------------------\n");
 }
 
+void turtle_run() {
+    char* input;
+    struct Job* job;
+    int status;
+
+    while (1) {
+        set_text(first_color);
+        printf("%s@turtle ", getenv("LOGNAME"));
+
+        set_text(second_color);
+        printf("%s $ ", getcwd(shell->dir, 4096));
+
+        set_text(third_color);
+        input = turtle_read();
+
+        job = turtle_parse(input);
+
+        status = turtle_execute(job);
+    }
+}
 
 char* turtle_read() {
-    int buffer_size = input_size;
+    int buffer_size = INPUT_SIZE;
     int index = 0;
     char* buffer = malloc(sizeof(char) * buffer_size);
     int letter;
@@ -398,7 +138,7 @@ char* turtle_read() {
                     new_command->turtle_next = turtle_head;
                 }
                 turtle_head = new_command;
-
+                
                 return buffer;
             } else {
                 index-=2;
@@ -413,7 +153,7 @@ char* turtle_read() {
 
         // determine whether we need to allocate more space
         if (index >= buffer_size) {
-            buffer_size += input_size;
+            buffer_size += INPUT_SIZE;
             buffer = realloc(buffer, buffer_size);
 
             // make sure we had a successful malloc
@@ -423,48 +163,481 @@ char* turtle_read() {
             }
         }
     }
-
 }
 
-void turtle_run() {
-    char* input;
-    struct Commands* list_commands;
-    int status = 1;
-    
-    while (status) {
-        // print the prompt in the form of user@turtle/cwd $
-        set_text(first_color);
-        printf("%s@turtle ", getenv("LOGNAME"));
-        
-        set_text(second_color);
-        printf("%s $ ", getcwd(cur_directory, 4096));
+struct Job* turtle_parse(char* input) {
+    struct Command *root_cmd = NULL;
+    struct Command *cmd = NULL;
+    enum mode mode_type = FOREGROUND;
 
-        set_text(third_color);
+    if (input[strlen(input) - 1] == '&') {
+        mode_type = BACKGROUND;
+        input[strlen(input) - 1] = '\0';
+    }
 
-        // read the user's command(s) from standard input
-        input = turtle_read();
-        
-        // parse the string into its command and arguments
-        list_commands = turtle_parse(input);
+    int num_commands = 0;
+    int input_index = 0;
 
-        //execute the command
-        status = turtle_execute(list_commands);
+    // find how many comands there are
+    while (input[input_index] != '\0') {
+        if (input[input_index] == '|') {
+            num_commands++;
+        }
+        input_index++;
+    }
+    num_commands++;
 
-        // clean the memory for the next command
-        free(input);
-        free_commands(list_commands);
+    // parse through each individual command
+    char* save;
+    char* cur_cmd = strtok_r(input, "|", &save);
+    int i = 0;
+    while (cur_cmd != NULL && i < num_commands) {
+        struct Command* new_cmd = turtle_parse_single(cur_cmd);
+        if (!root_cmd) {
+            root_cmd = new_cmd;
+            cmd = root_cmd;
+        } else {
+            cmd->next = new_cmd;
+            cmd = new_cmd;
+        }
+        cur_cmd = strtok_r(NULL, "|", &save);
+        i++;
+    }
+
+    // create a new job associated with this command
+    struct Job* new_job = calloc(sizeof(struct Job), 1);
+    new_job->root = root_cmd;
+    new_job->pgid = -1;
+    new_job->mode_type = mode_type;
+    return new_job;
+}
+
+struct Command* turtle_parse_single(char* command) {
+    int buf_size = BUFFER_SIZE;
+    int position = 0;
+    char* arg;
+    char** args = calloc(buf_size * sizeof(char*), 1);
+
+    if (!args) {
+        fprintf(stderr, "turtle failed to allocate memory\n");
+        exit(EXIT_FAILURE);
+    }
+
+    arg = strtok(command, " \t\r\n\a");
+    while (arg != NULL) {
+        glob_t glob_buffer;
+        int glob_count = 0;
+        if (strchr(arg, '*') != NULL || strchr(arg, '?') != NULL) {
+            glob(arg, 0, NULL, &glob_buffer);
+            glob_count = glob_buffer.gl_pathc;
+        }
+
+        if (position + glob_count >= buf_size) {
+            buf_size += BUFFER_SIZE;
+            buf_size += glob_count;
+            args = realloc(args, buf_size * sizeof(char*));
+            if (!args) {
+                fprintf(stderr, "turtle failed to allocate memory\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if (glob_count > 0) {
+            for (int i = 0; i < glob_count; i++) {
+                args[position++] = strdup(glob_buffer.gl_pathv[i]);
+            }
+            globfree(&glob_buffer);
+        } else {
+            if (arg[0] == '$') {
+                args[position] = getenv(&(arg[1]));
+            } else {
+                args[position] = arg;
+            }
+            position++;
+        }
+        arg = strtok(NULL, " \t\r\n\a");
+    }
+    // check if there was io redirection
+    // and to see how long the actual command is
+    int i = 0, argc = 0;
+    char* input_path = NULL;
+    char* output_path = NULL;
+    while (i < position) {
+        if (args[i][0] == '<' || args[i][0] == '>') {
+            break;
+        }
+        i++;
+    }
+    argc = i;
+
+    // copy input/output paths
+    for(int j = i; j < position; j++) {
+        if (args[j][0] == '<') {
+            // input_path is the next arg
+            if (strlen(args[j]) == 1) {
+                input_path = calloc(strlen((args[j+1]) + 1) * sizeof(char), 1);
+                strcpy(input_path, args[j+1]);
+                j++;
+            }
+            // input path is part of this arg
+            else {
+                input_path = calloc(strlen(args[j]) * sizeof(char), 1);
+                strcpy(input_path, args[j] + 1);
+            }
+        } else if (args[i][0] == '>') {
+            // output path is the next arg
+            if (strlen(args[j]) == 1) {
+                output_path = calloc((strlen(args[j+1]+1)) * sizeof(char), 1);
+                strcpy(output_path, args[j+1]);
+            }
+            // output path is part of this arg
+            else {
+                output_path = calloc(strlen(args[j]) * sizeof(char), 1);
+                strcpy(output_path, args[j]+1);
+            }
+        } else {
+            break;
+        }
+    }
+    // null terminate the command to ignore io redirection
+    for (int j = argc; j <= position; j++) {
+        args[j] = NULL;
+    }
+
+    struct Command* new_cmd = calloc(sizeof(struct Command), 1);
+    new_cmd->argv = args;
+    new_cmd->argc = argc;
+    new_cmd->input_path = input_path;
+    new_cmd->output_path = output_path;
+    new_cmd->pid = -1;
+    new_cmd->cmd_type = turtle_get_cmd_type(args[0]);
+    new_cmd->next = NULL;
+    return new_cmd;
+}
+
+enum command_type turtle_get_cmd_type(char* cmd_name) {
+    if (strcmp(cmd_name, "exit") == 0) {
+        return EXIT;
+    } else if (strcmp(cmd_name, "cd") == 0) {
+        return CD;
+    } else if (strcmp(cmd_name, "jobs") == 0) {
+        return JOBS;
+    } else if (strcmp(cmd_name, "fg") == 0) {
+        return FG;
+    } else if (strcmp(cmd_name, "bg") == 0) {
+        return BG;
+    } else if (strcmp(cmd_name, "kill") == 0) {
+        return KILL;
+    } else if (strcmp(cmd_name, "export") == 0) {
+        return EXPORT;
+    } else if (strcmp(cmd_name, "unset") == 0) {
+        return UNSET;
+    } else if (strcmp(cmd_name, "history") == 0) {
+        return HISTORY;
+    } else if (strcmp(cmd_name, "theme") == 0) {
+        return THEME;
+    } else {
+        return EXTERNAL;
     }
 }
 
-void turtle_welcome() {
-    printf("------------------------------------------------------\n");
-    printf("        you have stumbled on the turtle!\n\n");
-    printf("\t                    __\n");
-    printf("\t         .,-;-;-,. /'_\\\n");
-    printf("\t       _/_/_/_|_\\_\\) /\n");
-    printf("\t     '-<_><_><_><_>=/\\\n");
-    printf("\t       `/_/====/_/-'\\_\\\n");
-    printf("\t        \"\"     \"\"    \"\"\n");
-    printf("\n    have fun interacting with the turtle!\n");
-    printf("------------------------------------------------------\n");
+int turtle_execute(struct Job* job) {
+    int exec_ret = 1, in_fd = 0, fd[2], job_id = -1;
+
+    if (job->root->cmd_type == EXTERNAL) {
+        job_id = turtle_insert_job(job);
+    }
+
+    struct Command* cur_cmd = job->root;
+    while (cur_cmd != NULL) {
+        if (cur_cmd == job->root && cur_cmd->input_path != NULL) {
+            in_fd = open(cur_cmd->input_path, O_RDONLY);
+            if (in_fd < 0) {
+                printf("turtle found no such file or directory to read from: %s\n", cur_cmd->input_path);
+                turtle_remove_job(job_id);
+                return -1;
+            }
+        }
+        // identified piping
+        if (cur_cmd->next != NULL) {
+            pipe(fd);
+            exec_ret = turtle_execute_single(job, cur_cmd, in_fd, fd[1], PIPELINE);
+            close(fd[1]);
+            in_fd = fd[0];
+        } else {
+            int out_fd = 1;
+            if (cur_cmd->output_path != NULL) {
+                out_fd = open(cur_cmd->output_path, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+                if (out_fd < 0) {
+                    out_fd = 1;
+                }
+            }
+            exec_ret = turtle_execute_single(job, cur_cmd, in_fd, out_fd, job->mode_type);
+        }
+
+        cur_cmd = cur_cmd->next;
+    }
+
+    if (job->root->cmd_type == EXTERNAL) {
+        if (exec_ret >= 0 && job->mode_type == FOREGROUND) {
+            turtle_remove_job(job_id);
+        } else if (job->mode_type == BACKGROUND) {
+            turtle_print_process(job_id);
+        }
+    }
+
+    return exec_ret;
+}
+
+int turtle_insert_job(struct Job* job) {
+    int id = -1;
+
+    for (int i = 1; i <= MAX_NUM_JOBS; i++) {
+        if (shell->jobs[i] == NULL) {
+            id = i;
+            break;
+        }
+    }
+    
+    if (id < 0) {
+        return -1;
+    }
+    
+    job->id = id;
+    shell->jobs[id] = job;
+    return id;
+}
+
+int turtle_remove_job(int id) {
+    if (id < 0 || id > MAX_NUM_JOBS || shell->jobs[id] == NULL) {
+        return -1;
+    }
+    
+    // free all the memory associated with this job
+    struct Job* job = shell->jobs[id];
+    struct Command* temp;
+    struct Command* cur_cmd = job->root;
+    while (cur_cmd != NULL) {
+        temp = cur_cmd->next;
+        free(cur_cmd->argv);
+        free(cur_cmd->input_path);
+        free(cur_cmd->output_path);
+        free(cur_cmd);
+        cur_cmd = temp;
+    }
+    free(job);
+
+    shell->jobs[id] = NULL;
+
+    return 0;
+}
+
+int turtle_print_process(int id) {
+    if (id < 0 || id > MAX_NUM_JOBS || shell->jobs[id] == NULL) {
+        return -1;
+    }
+
+    printf("[%d]", id);
+
+    struct Command* cur_cmd = shell->jobs[id]->root;
+    while (cur_cmd != NULL) {
+        printf(" %d", cur_cmd->pid);
+        cur_cmd = cur_cmd->next;
+    }
+    printf("\n");
+
+    return 0;
+}
+
+int turtle_execute_single(struct Job* job, struct Command* cmd, int in_fd, int out_fd, enum mode mode_type) {
+    cmd->status_type = RUNNING;
+    // check if the command is any of the builtins
+    // EXIT, CD, JOBS, FG, BG, KILL, EXPORT, UNSET
+    if (cmd->cmd_type == EXIT) {
+        return turtle_exit();
+    } else if (cmd->cmd_type == CD) {
+        return turtle_cd(cmd->argv);
+    } else if (cmd->cmd_type == JOBS) {
+        return 0;
+    } else if (cmd->cmd_type == FG) {
+        return 0;
+    } else if (cmd->cmd_type == BG) {
+        return 0;
+    } else if (cmd->cmd_type == KILL) {
+        return 0;
+    } else if (cmd->cmd_type == EXPORT) {
+        return 0;
+    } else if (cmd->cmd_type == UNSET) {
+        return 0;
+    } else if (cmd->cmd_type == HISTORY) {
+        return turtle_history();
+    } else if (cmd->cmd_type == THEME) {
+        return turtle_theme(cmd->argv);
+    }
+
+    // check if the command is assigning a variable
+    for (int i = 0; i < strlen(cmd->argv[0]); i++) {
+        if (cmd->argv[0][i] == '=') {
+            putenv(cmd->argv[0]);
+            return 1;
+        }
+    }
+
+    int exec_ret = 0;
+    pid_t child = fork();
+
+    if (child < 0) {
+        return -1;
+    } else if (child == 0) {
+        // restore all the signals
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+        signal(SIGTTIN, SIG_DFL);
+        signal(SIGTTOU, SIG_DFL);
+        signal(SIGCHLD, SIG_DFL);
+
+        // set this cmd's pid and process group
+        cmd->pid = getpid();
+        if (job->pgid <= 0) {
+            job->pgid = cmd->pid;
+        }
+        setpgid(0, job->pgid);
+
+        // check for input redirection
+        if (in_fd != 0) {
+            dup2(in_fd, 0);
+            close(in_fd);
+        }
+
+        // check for output redirection
+        if (out_fd != 1) {
+            dup2(out_fd, 1);
+            close(out_fd);
+        }
+
+        execvp(cmd->argv[0], cmd->argv);
+        fprintf(stderr, "turtle could not find command: %s\n", cmd->argv[0]);
+        exit(0);
+    } else { // parent
+        cmd->pid = child;
+        if (job->pgid <= 0) {
+            job->pgid = cmd->pid;
+        }
+        setpgid(child, job->pgid);
+
+        // wait for this process to finish
+        if (mode_type == FOREGROUND) {
+            tcsetpgrp(0, job->pgid);
+            exec_ret = turtle_wait_job(job->id);
+            signal(SIGTTOU, SIG_IGN);
+            tcsetpgrp(0, getpid());
+            signal(SIGTTOU, SIG_DFL);
+        }
+    }
+
+    return exec_ret;
+
+}
+
+int turtle_wait_job(int id) {
+    if (id < 0 || id > MAX_NUM_JOBS || shell->jobs[id] == NULL) {
+        return -1;
+    }
+
+    // find how many subcommands we need to wait on
+    int cmd_count = 0;
+    struct Command* cur_cmd = shell->jobs[id]->root;
+    while (cur_cmd != NULL) {
+        if (cur_cmd->status_type != DONE) {
+            cmd_count++;
+        }
+        cur_cmd = cur_cmd->next;
+    }
+
+    int wait_pid = -1;
+    int wait_count = 0;
+    int status = 0;
+
+    do {
+        wait_pid = waitpid(-shell->jobs[id]->pgid, &status, WUNTRACED);
+        wait_count++;
+
+        if (WIFEXITED(status)) {
+            turtle_set_status(wait_pid, DONE);
+        } else if (WIFSIGNALED(status)) {
+            turtle_set_status(wait_pid, TERMINATED);
+        } else if (WSTOPSIG(status)) {
+            status = -1;
+            turtle_set_status(wait_pid, SUSPENDED);
+            if (wait_count == cmd_count) {
+                turtle_print_job_status(wait_pid);
+            }
+        }
+    } while (wait_count < cmd_count);
+
+    return status;
+}
+
+int turtle_set_status(int pid, enum status status) {
+    struct Command* cur_cmd;
+
+    for (int i = 1; i <= MAX_NUM_JOBS; i++) {
+        if (shell->jobs[i] == NULL) {
+            continue;
+        }
+        cur_cmd = shell->jobs[i]->root;
+        while (cur_cmd != NULL) {
+            if (cur_cmd->pid == pid) {
+                cur_cmd->status_type = status;
+                return 0;
+            }
+            cur_cmd = cur_cmd->next;
+        }
+    }
+
+    // couldn't find the process to change its status of
+    return -1;
+}
+
+int turtle_print_job_status(int id) {
+    if (id < 0 || id > MAX_NUM_JOBS || shell->jobs[id] == NULL) {
+        return -1;
+    }
+
+    printf("[%d]", id);
+
+    struct Command* cur_cmd = shell->jobs[id]->root;
+    while (cur_cmd != NULL) {
+        printf("\t%d\t", cur_cmd->pid);
+        for(int i = 0; i < cur_cmd->argc; i++) {
+            printf("%s ", cur_cmd->argv[i]);
+        }
+        printf("\t");
+        switch(cur_cmd->status_type) {
+            case RUNNING:
+                printf("running");
+                break;
+            case DONE:
+                printf("done");
+                break;
+            case SUSPENDED:
+                printf("suspended");
+                break;
+            case CONTINUED:
+                printf("continued");
+                break;
+            case TERMINATED:
+                printf("terminated");
+                break;
+
+        }
+        cur_cmd = cur_cmd->next;
+        if (cur_cmd != NULL) {
+            printf("|\n");
+        } else {
+            printf("\n");
+        }
+    }
+    return 0;
 }

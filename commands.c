@@ -32,7 +32,7 @@ int turtle_cd(char** args) {
 /* exits the shell */
 int turtle_exit() {
     set_text(0);
-    return 0;
+    exit(0);
 }
 
 /* prints basic information about this shell */
@@ -79,18 +79,18 @@ int turtle_history() {
         i++;
     }
 
-    struct Commands* list_commands = turtle_parse(current->history_command);
+    struct Job* job = turtle_parse(current->history_command);
 
-    int status = turtle_execute(list_commands);
+    int status = turtle_execute(job);
     
     return status;
 }
 
 /* change theme of shell */
-void turtle_theme(char** args) {
+int turtle_theme(char** args) {
     if(args[1] == NULL) {
         fprintf(stderr, "turtle: invalid argument for theme\n");
-        return;
+        return -1;
     }
     if(strcmp(args[1], "help") == 0) turtle_theme_help();
     else if(strcmp(args[1], "reset") == 0) set_theme(RESET, RESET, RESET);
@@ -108,6 +108,8 @@ void turtle_theme(char** args) {
     else { //invalid theme
         fprintf(stderr, "turtle: invalid theme name\n");
     }
+
+    return 1;
 }
 
 void turtle_theme_help() {
@@ -178,13 +180,13 @@ int turtlesay(char** args) {
     return 1;
 }
 
-void set_text(uint32_t color) { 
+void set_text(int color) { 
     if(((color > 37) || (color < 30)) && (color != 0)) {
         fprintf(stderr, "turtle: invalid color\n");
     }
     printf("\033[1;%dm", color); }
 
-void set_theme(uint32_t first, uint32_t second, uint32_t third) {
+void set_theme(int first, int second, int third) {
     first_color = first;
     second_color = second;
     third_color = third;
