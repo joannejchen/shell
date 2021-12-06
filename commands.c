@@ -111,6 +111,15 @@ int turtle_kill(int argc, char** argv) {
     return 1;
 }
 
+int turtle_unset(int argc, char** argv) {
+    if (argc < 2) {
+        printf("turtle: invalid argument for unset\n");
+        return -1;
+    }
+
+    return unsetenv(argv[1]);
+}
+
 /* prints basic information about this shell */
 int turtle_help() {
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");

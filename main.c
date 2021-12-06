@@ -250,6 +250,11 @@ struct Command* turtle_parse_single(char* command) {
         } else {
             if (arg[0] == '$') {
                 args[position] = getenv(&(arg[1]));
+                if (args[position] == NULL) {
+                    args[position] = malloc(sizeof(char) * 2);
+                    args[position][0] = '\n';
+                    args[position][1] = '\0';
+                }
             } else {
                 args[position] = arg;
             }
@@ -328,8 +333,6 @@ enum command_type turtle_get_cmd_type(char* cmd_name) {
         return BG;
     } else if (strcmp(cmd_name, "kill") == 0) {
         return KILL;
-    } else if (strcmp(cmd_name, "export") == 0) {
-        return EXPORT;
     } else if (strcmp(cmd_name, "unset") == 0) {
         return UNSET;
     } else if (strcmp(cmd_name, "history") == 0) {
@@ -473,7 +476,6 @@ int turtle_print_process(int id) {
 int turtle_execute_single(struct Job* job, struct Command* cmd, int in_fd, int out_fd, enum mode mode_type) {
     cmd->status_type = RUNNING;
     // check if the command is any of the builtins
-    // EXIT, CD, JOBS, FG, BG, KILL, EXPORT, UNSET
     if (cmd->cmd_type == EXIT) {
         return turtle_exit();
     } else if (cmd->cmd_type == CD) {
@@ -486,10 +488,8 @@ int turtle_execute_single(struct Job* job, struct Command* cmd, int in_fd, int o
         return turtle_bg(cmd->argc, cmd->argv);
     } else if (cmd->cmd_type == KILL) {
         return turtle_kill(cmd->argc, cmd->argv);
-    } else if (cmd->cmd_type == EXPORT) {
-        return 0;
     } else if (cmd->cmd_type == UNSET) {
-        return 0;
+        return turtle_unset(cmd->argc, cmd->argv);
     } else if (cmd->cmd_type == HISTORY) {
         return turtle_history();
     } else if (cmd->cmd_type == THEME) {

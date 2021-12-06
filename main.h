@@ -35,7 +35,7 @@ struct shell_info {
 struct shell_info* shell;
 
 // information related to a command
-enum command_type{EXIT, CD, JOBS, FG, BG, KILL, EXPORT, UNSET, EXTERNAL, HISTORY, THEME};
+enum command_type{EXIT, CD, JOBS, FG, BG, KILL, UNSET, EXTERNAL, HISTORY, THEME};
 enum status{RUNNING, DONE, SUSPENDED, CONTINUED, TERMINATED};
 struct Command {
     int argc;                   // number of arguments

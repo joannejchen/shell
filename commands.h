@@ -10,6 +10,7 @@ extern int turtle_jobs();
 extern int turtle_fg(int argc, char** argv);
 extern int turtle_bg(int argc, char** argv);
 extern int turtle_kill(int argc, char** argv);
+extern int turtle_unset(int argc, char** argv);
 extern int turtle_help();
 extern int turtle_history();
 extern int turtlesay(char** args);
