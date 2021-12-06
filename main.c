@@ -20,9 +20,11 @@ int main(int argc, char** argv) {
 // make sure the shell is running interactively as the foreground job
 // this is needed in order to allow our shell to also be able to run job control
 void turtle_init() {
+    pid_t turtle_pgid;
+
     // check if we are running interactively (i.e. when STDIN is the terminal)
-    turtle_terminal = STDIN_FILENO;
-    turtle_is_interactive = isatty(turtle_terminal);
+    int turtle_terminal = STDIN_FILENO;
+    int turtle_is_interactive = isatty(turtle_terminal);
 
     if (turtle_is_interactive) {
         // loop until we are in the foreground
@@ -75,7 +77,6 @@ void turtle_welcome() {
 void turtle_run() {
     char* input;
     struct Job* job;
-    int status;
 
     while (1) {
         set_text(first_color);
@@ -89,7 +90,7 @@ void turtle_run() {
 
         job = turtle_parse(input);
 
-        status = turtle_execute(job);
+        turtle_execute(job);
     }
 }
 
@@ -284,7 +285,7 @@ struct Command* turtle_parse_single(char* command) {
         if (args[j][0] == '<') {
             // input_path is the next arg
             if (strlen(args[j]) == 1) {
-                input_path = calloc(strlen((args[j+1]) + 1) * sizeof(char), 1);
+                input_path = calloc(strlen((args[j+1])) * sizeof(char), 1);
                 strcpy(input_path, args[j+1]);
                 j++;
             }
@@ -293,10 +294,10 @@ struct Command* turtle_parse_single(char* command) {
                 input_path = calloc(strlen(args[j]) * sizeof(char), 1);
                 strcpy(input_path, args[j] + 1);
             }
-        } else if (args[i][0] == '>') {
+        } else if (args[j][0] == '>') {
             // output path is the next arg
             if (strlen(args[j]) == 1) {
-                output_path = calloc((strlen(args[j+1]+1)) * sizeof(char), 1);
+                output_path = calloc((strlen(args[j+1])) * sizeof(char), 1);
                 strcpy(output_path, args[j+1]);
             }
             // output path is part of this arg

@@ -20,11 +20,6 @@
 // signal handlers
 struct sigaction act_int;
 
-// shell attributes for init
-static pid_t turtle_pgid;
-static int turtle_terminal;
-static int turtle_is_interactive;
-
 // shell attributes for current shell information
 struct shell_info {
     char user[MAX_USER_LENGTH];
