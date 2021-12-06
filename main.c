@@ -379,7 +379,7 @@ int turtle_execute(struct Job* job) {
         } else {
             int out_fd = 1;
             if (cur_cmd->output_path != NULL) {
-                out_fd = open(cur_cmd->output_path, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+                out_fd = open(cur_cmd->output_path, O_CREAT|O_WRONLY|O_TRUNC, 0x600);
                 if (out_fd < 0) {
                     out_fd = 1;
                 }
