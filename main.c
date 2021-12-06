@@ -432,6 +432,27 @@ int turtle_remove_job(int id) {
     return 0;
 }
 
+int turtle_remove_process(int pid) {
+    struct Command* cur_cmd;
+
+    for (int i = 1; i <= MAX_NUM_JOBS; i++) {
+        if (shell->jobs[i] == NULL) {
+            continue;
+        }
+        cur_cmd = shell->jobs[i]->root;
+        while (cur_cmd != NULL) {
+            if (cur_cmd->pid == pid) {
+                turtle_remove_job(i);
+                return 0;
+            }
+            cur_cmd = cur_cmd->next;
+        }
+    }
+
+    // couldn't find the process to change its status of
+    return -1;
+}
+
 int turtle_print_process(int id) {
     if (id < 0 || id > MAX_NUM_JOBS || shell->jobs[id] == NULL) {
         return -1;
@@ -458,13 +479,13 @@ int turtle_execute_single(struct Job* job, struct Command* cmd, int in_fd, int o
     } else if (cmd->cmd_type == CD) {
         return turtle_cd(cmd->argv);
     } else if (cmd->cmd_type == JOBS) {
-        return 0;
+        return turtle_jobs();
     } else if (cmd->cmd_type == FG) {
-        return 0;
+        return turtle_fg(cmd->argc, cmd->argv);
     } else if (cmd->cmd_type == BG) {
-        return 0;
+        return turtle_bg(cmd->argc, cmd->argv);
     } else if (cmd->cmd_type == KILL) {
-        return 0;
+        return turtle_kill(cmd->argc, cmd->argv);
     } else if (cmd->cmd_type == EXPORT) {
         return 0;
     } else if (cmd->cmd_type == UNSET) {

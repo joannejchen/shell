@@ -77,6 +77,7 @@ enum command_type turtle_get_cmd_type(char* command);
 int turtle_execute(struct Job* job);
 int turtle_insert_job(struct Job* job);
 int turtle_remove_job(int id);
+int turtle_remove_process(int pid);
 int turtle_print_process(int id);
 int turtle_execute_single(struct Job* job, struct Command* cmd, int in_fd, int out_fd, enum mode mode_type);
 int turtle_wait_job(int id);

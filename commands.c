@@ -35,6 +35,82 @@ int turtle_exit() {
     exit(0);
 }
 
+int turtle_jobs() {
+    for (int i = 0; i < MAX_NUM_JOBS; i++) {
+        if (shell->jobs[i] != NULL) {
+            turtle_print_job_status(i);
+        }
+    }
+    return 1;
+}
+
+int turtle_fg(int argc, char** argv) {
+    if (argc < 2) {
+        printf("turtle: invalid argument for fg\n");
+        return -1;
+    }
+    pid_t pid = atoi(argv[1]);
+
+    if (kill(-pid, SIGCONT) < 0) {
+        printf("turtle could not find job %d\n", pid);
+        return -1;
+    }
+
+    tcsetpgrp(0, pid);
+    
+    // wait for the process to finish executing
+    int status = 0;
+    waitpid(pid, &status, WUNTRACED);
+    if (WIFEXITED(status)) {
+        turtle_set_status(pid, DONE);
+    } else if (WIFSIGNALED(status)) {
+        turtle_set_status(pid, TERMINATED);
+    } else if (WSTOPSIG(status)) {
+        status = -1;
+        turtle_set_status(pid, SUSPENDED);
+    }
+
+    signal(SIGTTOU, SIG_IGN);
+    tcsetpgrp(0, getpid());
+    signal(SIGTTOU, SIG_DFL);
+
+    turtle_remove_process(pid);
+
+    return 0;
+}
+
+int turtle_bg(int argc, char** argv) {
+    if (argc < 2) {
+        printf("turtle: invalid argument for bg\n");
+        return -1;
+    }
+
+    pid_t pid = atoi(argv[1]);
+
+    if (kill(-pid, SIGCONT) < 0) {
+        printf("turtle could not find job %d\n", pid);
+    }
+
+    return 0;
+}
+
+int turtle_kill(int argc, char** argv) {
+    if (argc < 2) {
+        printf("turtle: invalid argument for kill\n");
+        return -1;
+    }
+
+    pid_t pid = atoi(argv[1]);
+
+    if (kill(pid, SIGKILL) < 0) {
+        printf("turtle could not find job %d\n", pid);
+    }
+
+    turtle_remove_process(pid);
+
+    return 1;
+}
+
 /* prints basic information about this shell */
 int turtle_help() {
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
