@@ -131,6 +131,7 @@ int turtle_help() {
     printf("\ti/o redirection\n");
     printf("\tpiping\n");
     printf("\thandling signals\n");
+    printf("\thandling wildcards like * and ?\n");
     printf("\tother fun features like theme\n");
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     return 1;
