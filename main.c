@@ -114,13 +114,15 @@ char* turtle_read() {
             buffer[index] = '\0'; // null terminate strings
 
             // copy this string into the history
-            struct History* new_command = calloc(sizeof(struct History*), 1);
-            new_command->history_command = calloc(sizeof(char) * strlen(buffer), 1);
-            strcpy(new_command->history_command, buffer);
-            if (turtle_head != NULL) {
-                new_command->turtle_next = turtle_head;
+            if (strcmp(buffer, "history") != 0) {
+                struct History* new_command = calloc(sizeof(struct History*), 1);
+                new_command->history_command = calloc(sizeof(char) * strlen(buffer), 1);
+                strcpy(new_command->history_command, buffer);
+                if (turtle_head != NULL) {
+                    new_command->turtle_next = turtle_head;
+                }
+                turtle_head = new_command;
             }
-            turtle_head = new_command;
 
             return buffer;
         }
@@ -131,13 +133,15 @@ char* turtle_read() {
                 buffer[index] = '\0';
 
                 // copy this string into the history
-                struct History* new_command = calloc(sizeof(struct History*), 1);
-                new_command->history_command = calloc(sizeof(char) * strlen(buffer), 1);
-                strcpy(new_command->history_command, buffer);
-                if (turtle_head != NULL) {
-                    new_command->turtle_next = turtle_head;
+                if (strcmp(buffer, "history") != 0) {
+                    struct History* new_command = calloc(sizeof(struct History*), 1);
+                    new_command->history_command = calloc(sizeof(char) * strlen(buffer), 1);
+                    strcpy(new_command->history_command, buffer);
+                    if (turtle_head != NULL) {
+                        new_command->turtle_next = turtle_head;
+                    }
+                    turtle_head = new_command;
                 }
-                turtle_head = new_command;
                 
                 return buffer;
             } else {
@@ -339,6 +343,10 @@ enum command_type turtle_get_cmd_type(char* cmd_name) {
         return HISTORY;
     } else if (strcmp(cmd_name, "theme") == 0) {
         return THEME;
+    } else if (strcmp(cmd_name, "help") == 0) {
+        return HELP;
+    } else if (strcmp(cmd_name, "turtlesay") == 0) {
+        return TURTLESAY;
     } else {
         return EXTERNAL;
     }
@@ -479,7 +487,7 @@ int turtle_execute_single(struct Job* job, struct Command* cmd, int in_fd, int o
     if (cmd->cmd_type == EXIT) {
         return turtle_exit();
     } else if (cmd->cmd_type == CD) {
-        return turtle_cd(cmd->argv);
+        return turtle_cd(cmd->argc, cmd->argv);
     } else if (cmd->cmd_type == JOBS) {
         return turtle_jobs();
     } else if (cmd->cmd_type == FG) {
@@ -493,7 +501,11 @@ int turtle_execute_single(struct Job* job, struct Command* cmd, int in_fd, int o
     } else if (cmd->cmd_type == HISTORY) {
         return turtle_history();
     } else if (cmd->cmd_type == THEME) {
-        return turtle_theme(cmd->argv);
+        return turtle_theme(cmd->argc, cmd->argv);
+    } else if (cmd->cmd_type == HELP) {
+        return turtle_help();
+    } else if (cmd->cmd_type == TURTLESAY) {
+        return turtlesay(cmd->argv);
     }
 
     // check if the command is assigning a variable

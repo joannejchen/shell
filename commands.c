@@ -17,9 +17,9 @@
 #define WHT 37
 
 /* change directory */
-int turtle_cd(char** args) {
+int turtle_cd(int argc, char** args) {
     //check for invalid input
-    if(args[1] == NULL) {
+    if(argc < 2) {
         fprintf(stderr, "turtle: invalid argument for cd\n");
     } else {
         if(chdir(args[1]) != 0) {
@@ -125,9 +125,13 @@ int turtle_help() {
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     printf("welcome to the turtle shell!\n");
     printf("to use, type a valid command followed by any relevant arguments\n");
-    printf("in addition to most general shell commands, the following are also builtin:\n");
-    printf("\thelp\n");
-    printf("\tturtlesay\n");
+    printf("the following functionalities are provided:\n");
+    printf("\tbuiltins like help, cd, turtlesay, exit, unset, kill, fg, bg, and jobs\n");
+    printf("\tsaves command history with the history command\n");
+    printf("\ti/o redirection\n");
+    printf("\tpiping\n");
+    printf("\thandling signals\n");
+    printf("\tother fun features like theme\n");
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     return 1;
 }
@@ -172,8 +176,8 @@ int turtle_history() {
 }
 
 /* change theme of shell */
-int turtle_theme(char** args) {
-    if(args[1] == NULL) {
+int turtle_theme(int argc, char** args) {
+    if(argc < 2) {
         fprintf(stderr, "turtle: invalid argument for theme\n");
         return -1;
     }
